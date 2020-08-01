@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UltraBot lamp test</title>
+    <style>
+        #info {
+            padding: 1 rem;
+            min-height: 200px;
+            max-height: 100%;
+            overflow-y: scroll;
+            text-overflow: ellipsis;
+        }
+        button {
+            min-width: 100px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body onload="init()">
+    <div class="container">
+        <h2>Lamps control &nbsp;&nbsp;&nbsp;&nbsp;<small>Status:<span id="status">-</span></small></h2>
+ 
+        <table style="width: 100%;">
+            <tr>
+                <td><button id="set1" onclick="set(1)">Enable L center</button></td>
+                <td><button id="set2" onclick="set(2)">Enable L side</button></td>
+                <td><button id="set4" onclick="set(4)">Enable R center</button></td>
+                <td><button id="set8" onclick="set(8)">Enable R side</button></td>
+            </tr>
+            <tr>
+                <td><button id="reset1" onclick="reset(1)" disabled>Disable L center</button></td>
+                <td><button id="reset2" onclick="reset(2)" disabled>Disable L side</button></td>
+                <td><button id="reset4" onclick="reset(4)" disabled>Disable R center</button></td>
+                <td><button id="reset8" onclick="reset(8)" disabled>Disable R side</button></td>
+            </tr>
+            <tr>
+                <td colspan="3"><div id="info"></div></td>
+            </tr>
+        </table>
+    </div>
+</body>
+<script>
+    let url = "ws://" + window.location.hostname + "/ws";
+    let connectionStatus = document.getElementById("status");
+    let box = document.getElementById("info");
+
+    let mask = 0;
+
+    function init(){
+        connectionStatus.innerHTML = "Disconnected";
+        connectionStatus.style.color = "red";
+        wsConnect(url);
+    }
+
+    function set(id){
+        mask += id;
+        document.getElementById("reset"+id).disabled = false;
+        document.getElementById("set"+id).disabled = true;
+        doSend("m" + mask);
+        console.log("m"+mask);
+    }
+
+    function reset(id){
+        mask -= id;
+        document.getElementById("reset"+id).disabled = true;
+        document.getElementById("set"+id).disabled = false;
+        doSend("m"+mask);
+        console.log("m"+mask);
+    }
+
+    setInterval(() => {
+        doSend("g");
+    }, 1000);
+
+    function wsConnect(url) {
+        websocket = new WebSocket(url);
+        websocket.onopen = function(evt) { onOpen(evt) };
+        websocket.onclose = function(evt) { onClose(evt) };
+        websocket.onmessage = function(evt) { onMessage(evt) };
+        websocket.onerror = function(evt) { onError(evt) };
+    }
+    
+    function onOpen(evt) {
+        console.log("Connected");
+        connectionStatus.innerHTML = "Connected";
+        connectionStatus.style.color = "green";
+        testMode.disabled = false;
+        runMode.disabled = false;
+        standbyMode.disabled = false;
+        doSend("info");
+    }
+    
+    function onClose(evt) {
+        connectionStatus.innerHTML = "Disconnected. Establishing connection...";
+        connectionStatus.style.color = "yellow";
+        console.log("Disconnected");
+        testMode.disabled = true;
+        runMode.disabled = true;
+        standbyMode.disabled = true;
+        setTimeout(function() { wsConnect(url) }, 1000);
+    }
+    
+    function onMessage(evt) {
+        console.log(evt.data);
+        printm(evt.data);
+        if(evt.data[0] === "m") {
+            mask = parseInt(evt.data.substr(2));
+            for (let index = 0; index < 4; index++) {
+                let id = Math.pow(2,index);
+                if ((mask >> index)  & 0x01) {
+                    document.getElementById("reset"+id).disabled = false;
+                    document.getElementById("set"+id).disabled = true;
+                } else {
+                    document.getElementById("reset"+id).disabled = true;
+                    document.getElementById("set"+id).disabled = false;
+                }
+            }
+        }
+    }
+
+    function printm(msg){
+        let p = document.createElement("p");
+        p.innerHTML = msg;
+        box.prepend(p);
+    }
+
+    function onError(evt) {
+        console.log("ERROR: " + evt.data);
+    }
+    
+    function doSend(message) {
+        console.log("Sending: " + message);
+        websocket.send(message);
+    }
+</script>
+</html>
